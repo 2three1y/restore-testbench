@@ -51,9 +51,8 @@
 
 <h2>Generate Sample Backup</h2>
 <form id="sample-form">
-  <label for="sample-pass">Password</label>
+  <label for="sample-pass">Password (leave empty for an unencrypted sample)</label>
   <input id="sample-pass" name="sample-pass" type="password" autocomplete="new-password">
-  <label class="check" for="sample-plain"><input id="sample-plain" name="sample-plain" type="checkbox"> No password (unencrypted)</label>
   <button type="submit" id="sample-btn">Generate Sample</button>
 </form>
 <div id="sample-status" class="out"></div>
@@ -62,7 +61,7 @@
 <form id="decrypt-form">
   <label for="restore-file">Backup file</label>
   <input id="restore-file" name="restore-file" type="file" accept=".looscid,application/json">
-  <label for="restore-pass">Password (optional if unencrypted)</label>
+  <label for="restore-pass">Password (only needed if the file is encrypted)</label>
   <input id="restore-pass" name="restore-pass" type="password" autocomplete="current-password">
   <button type="submit" id="decrypt-btn">Decrypt &amp; Inspect</button>
 </form>
@@ -373,13 +372,13 @@
     $('restore-btn').disabled = true;
   }
 
-  /* 1. Generate sample backup */
+  /* 1. Generate sample backup. Empty password = unencrypted, typed password = encrypted. */
   async function onSample(e) {
     e.preventDefault();
     clearError();
     var pass = $('sample-pass').value;
-    var plainMode = $('sample-plain').checked;
-    if (!plainMode && pass.length < 8) { report('sample-status', 'Password must be at least 8 characters, or tick No password.'); return; }
+    var plainMode = pass.length === 0;
+    if (!plainMode && pass.length < 8) { report('sample-status', 'Password must be at least 8 characters, or leave it empty for an unencrypted sample.'); return; }
     report('sample-status', plainMode ? 'Generating unencrypted sample backup...' : 'Generating sample backup...');
     var btn = $('sample-btn');
     btn.disabled = true;
@@ -433,7 +432,7 @@
     }
   }
 
-  /* 2. Decrypt and inspect */
+  /* 2. Decrypt and inspect. Plaintext files open with no password. Encrypted files need one. */
   async function onDecrypt(e) {
     e.preventDefault();
     clearError();
