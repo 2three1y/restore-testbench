@@ -60,7 +60,7 @@
 <h2>Restore Backup File</h2>
 <form id="decrypt-form">
   <label for="restore-file">Backup file</label>
-  <input id="restore-file" name="restore-file" type="file" accept=".looscid,application/json">
+  <input id="restore-file" name="restore-file" type="file" accept=".looscid,.json,application/json,text/plain,*/*">
   <label for="restore-pass">Password (only needed if the file is encrypted)</label>
   <input id="restore-pass" name="restore-pass" type="password" autocomplete="current-password">
   <button type="submit" id="decrypt-btn">Decrypt &amp; Inspect</button>
@@ -149,10 +149,20 @@
     });
   }
   function coded(code, msg) { var e = new Error(msg); e.code = code; return e; }
+  var PLAIN_HINTS = ['key', 'nsec', 'profile', 'app', 'dreams', 'pubkey', 'npub'];
   function plainPayload(f) {
-    if (!f || typeof f !== 'object') return null;
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return null;
     if (f.looscid_backup_data != null) return f;
-    return null;
+    if (f.looscid_backup != null) return null;
+    if (!PLAIN_HINTS.some(function (k) { return f[k] != null; })) return null;
+    var out = Object.assign({}, f);
+    out.looscid_backup_data = 1;
+    if (typeof out.nsec === 'string' && !out.key) out.key = { nsec: out.nsec };
+    if (typeof out.key === 'string') out.key = { nsec: out.key };
+    if (!out.profile || typeof out.profile !== 'object') out.profile = {};
+    if (!out.app || typeof out.app !== 'object') out.app = {};
+    if (!Array.isArray(out.dreams)) out.dreams = [];
+    return out;
   }
   async function unlockBackup(text, pass) {
     var f;
@@ -321,7 +331,8 @@
     };
     if (d.key && d.key.nsec) {
       try {
-        var sk = decodeNsec(d.key.nsec);
+        var raw = String(d.key.nsec).trim();
+        var sk = /^[0-9a-f]{64}$/i.test(raw) ? bytesOf(raw.toLowerCase()) : decodeNsec(raw);
         g.identity.pub = hexOf(schnorrPub(sk));
         g.identity.keys.push('looscid_test_identity');
         g.identity.count = 1;
