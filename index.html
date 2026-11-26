@@ -94,8 +94,10 @@
     { id: 'dreams', label: 'Dreams' },
     { id: 'chats', label: 'Chats' },
     { id: 'feeds', label: 'Follows and feeds' },
-    { id: 'sound', label: 'Sound and settings' }
+    { id: 'sound', label: 'Sound and settings' },
+    { id: 'other', label: 'Other top-level data' }
   ];
+  var KNOWN_TOP = ['looscid_backup_data', 'made', 'note', 'from', 'key', 'profile', 'server', 'dreams', 'rem_objects', 'app', 'home'];
   var P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
   var N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
   var GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
@@ -149,25 +151,29 @@
     });
   }
   function coded(code, msg) { var e = new Error(msg); e.code = code; return e; }
-  var PLAIN_HINTS = ['key', 'nsec', 'profile', 'app', 'dreams', 'pubkey', 'npub'];
   function plainPayload(f) {
-    if (!f || typeof f !== 'object' || Array.isArray(f)) return null;
-    if (f.looscid_backup_data != null) return f;
-    if (f.looscid_backup != null) return null;
-    if (!PLAIN_HINTS.some(function (k) { return f[k] != null; })) return null;
+    if (Array.isArray(f)) return { looscid_backup_data: 1, items: f };
+    if (!f || typeof f !== 'object') return null;
+    if (f.looscid_backup != null && f.kdf && f.cipher && typeof f.data === 'string') return null;
     var out = Object.assign({}, f);
     out.looscid_backup_data = 1;
     if (typeof out.nsec === 'string' && !out.key) out.key = { nsec: out.nsec };
     if (typeof out.key === 'string') out.key = { nsec: out.key };
-    if (!out.profile || typeof out.profile !== 'object') out.profile = {};
-    if (!out.app || typeof out.app !== 'object') out.app = {};
-    if (!Array.isArray(out.dreams)) out.dreams = [];
     return out;
+  }
+  function rawKeyPayload(text) {
+    var t = String(text || '').trim();
+    if (/^nsec1/i.test(t) || /^[0-9a-f]{64}$/i.test(t)) return { looscid_backup_data: 1, key: { nsec: t } };
+    return null;
   }
   async function unlockBackup(text, pass) {
     var f;
     try { f = JSON.parse(String(text || '').replace(/^\uFEFF/, '')); }
-    catch (e) { throw coded('not_backup', 'Not a Looscid backup file.'); }
+    catch (e) {
+      var rawDoc = rawKeyPayload(text);
+      if (rawDoc) return rawDoc;
+      throw coded('not_json', 'This file is not valid JSON and is not a key. Nothing was changed.');
+    }
     var plainDoc = plainPayload(f);
     if (plainDoc) return plainDoc;
     if (!f || typeof f !== 'object' || f.looscid_backup == null || !f.kdf || !f.cipher || typeof f.data !== 'string') {
@@ -327,7 +333,8 @@
       dreams: { keys: [], count: 0 },
       chats: { keys: [], count: 0 },
       feeds: { keys: [], count: 0 },
-      sound: { keys: [], count: 0 }
+      sound: { keys: [], count: 0 },
+      other: { keys: [], count: 0 }
     };
     if (d.key && d.key.nsec) {
       try {
@@ -351,6 +358,8 @@
       else g[cat].count++;
     });
     if (Array.isArray(d.dreams) && d.dreams.length) g.dreams.count = d.dreams.length;
+    Object.keys(d).forEach(function (k) { if (KNOWN_TOP.indexOf(k) === -1) g.other.keys.push(k); });
+    g.other.count = g.other.keys.length;
     return g;
   }
 
@@ -363,6 +372,26 @@
     fs.appendChild(lg);
     CATS.forEach(function (c) {
       var n = g[c.id].count;
+      if (c.id === 'other') {
+        g.other.keys.forEach(function (k, i) {
+          var ol = document.createElement('label');
+          ol.className = 'check';
+          var ob = document.createElement('input');
+          ob.type = 'checkbox';
+          ob.id = 'oth-' + i;
+          ob.name = 'oth-' + i;
+          ob.checked = false;
+          ol.appendChild(ob);
+          ol.appendChild(document.createTextNode('Top-level key: ' + k));
+          fs.appendChild(ol);
+        });
+        if (!n) {
+          var none = document.createElement('p');
+          none.textContent = 'No other top-level keys in this file.';
+          fs.appendChild(none);
+        }
+        return;
+      }
       var lab = document.createElement('label');
       lab.className = 'check';
       var box2 = document.createElement('input');
@@ -459,8 +488,9 @@
       state.data = d; state.groups = g;
       renderChooser(g);
       var n = CATS.filter(function (c) { return g[c.id].count > 0; }).length;
-      report('restore-status', 'Decrypted. ' + n + ' categories found. Choose items, then Restore Selected.');
-      var first = CATS.find(function (c) { return g[c.id].count > 0; });
+      var extra = g.other.keys.length ? ' Top-level keys found: ' + g.other.keys.join(', ') + '.' : '';
+      report('restore-status', 'File opened. ' + n + ' categories found.' + extra + ' Choose items, then Restore Selected.');
+      var first = CATS.find(function (c) { return c.id !== 'other' && g[c.id].count > 0; });
       if (first && $('cat-' + first.id)) $('cat-' + first.id).focus();
     } catch (err) {
       report('restore-status', err.message);
@@ -503,6 +533,9 @@
       if (!chosen[cat]) return;
       g[cat].keys.forEach(function (k) { out.push({ cat: cat, key: k, value: app[k] }); });
     });
+    (chosen.otherKeys || []).forEach(function (k) {
+      out.push({ cat: 'other', key: 'looscid_restored_' + k, value: JSON.stringify(d[k]) });
+    });
     return out;
   }
   function onRestore() {
@@ -510,10 +543,16 @@
     if (!state.data) { report('restore-result', 'Decrypt a backup file first.'); return; }
     var chosen = {};
     CATS.forEach(function (c) {
+      if (c.id === 'other') return;
       var b = $('cat-' + c.id);
       chosen[c.id] = !!(b && b.checked && !b.disabled);
     });
-    if (!CATS.some(function (c) { return chosen[c.id]; })) { report('restore-result', 'Nothing selected.'); return; }
+    chosen.otherKeys = [];
+    state.groups.other.keys.forEach(function (k, i) {
+      var ob = $('oth-' + i);
+      if (ob && ob.checked) chosen.otherKeys.push(k);
+    });
+    if (!CATS.some(function (c) { return c.id !== 'other' && chosen[c.id]; }) && !chosen.otherKeys.length) { report('restore-result', 'Nothing selected.'); return; }
     var writes = planWrites(state.data, state.groups, chosen);
     var updated = 0, failed = [];
     writes.forEach(function (w) {
