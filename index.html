@@ -4,138 +4,79 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Looscid Restore and nsec Testbench</title>
+<title>Looscid Restore Testbench</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 740px; margin: 0 auto; padding: 16px; line-height: 1.5; color: #111; background: #fff; }
-  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #bbb; padding-bottom: 4px; }
-  h3 { font-size: 1.05rem; margin-top: 1.5rem; }
-  .skip { position: absolute; left: -9999px; }
-  .skip:focus { left: 8px; top: 8px; background: #fff; padding: 8px; border: 2px solid #111; }
-  .field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
-  input[type=password], input[type=text], input[type=file] { min-height: 44px; font: inherit; padding: 8px; border: 1px solid #555; border-radius: 4px; max-width: 100%; }
-  button { min-height: 44px; min-width: 44px; padding: 8px 14px; font: inherit; border: 2px solid #111; background: #fff; color: #111; border-radius: 4px; cursor: pointer; }
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #000; background: #fff; }
+  h1 { font-size: 1.5rem; margin: 0 0 16px; }
+  h2 { font-size: 1.2rem; margin: 40px 0 16px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  input[type=password], input[type=text], input[type=file] { display: block; width: 100%; min-height: 44px; font: inherit; padding: 8px; border: 2px solid #000; border-radius: 4px; box-sizing: border-box; margin-bottom: 16px; background: #fff; color: #000; }
+  button { min-height: 44px; min-width: 44px; padding: 8px 16px; font: inherit; font-weight: 600; border: 2px solid #000; background: #fff; color: #000; border-radius: 4px; cursor: pointer; margin-bottom: 16px; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button:focus-visible, input:focus-visible, a:focus-visible, fieldset input:focus-visible { outline: 3px solid #0a58ca; outline-offset: 2px; }
-  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-  fieldset { border: 1px solid #888; border-radius: 4px; padding: 12px; margin: 12px 0; }
+  button:focus-visible, input:focus-visible, a:focus-visible, input[type=checkbox]:focus-visible { outline: 3px solid #0a58ca; outline-offset: 2px; }
+  fieldset { border: 2px solid #000; border-radius: 4px; padding: 12px 16px; margin: 0 0 16px; }
   legend { font-weight: 600; padding: 0 4px; }
-  .check { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-  #looscid-live { border: 1px solid #888; padding: 8px; min-height: 2.5em; border-radius: 4px; background: #f6f6f6; }
-  .msg { font-weight: 600; min-height: 1.5em; }
-  code { word-break: break-all; }
-  ol { padding-left: 1.4rem; }
+  .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+  .check input { width: 22px; height: 22px; margin: 0; }
+  .out { min-height: 1.5em; margin: 0 0 16px; font-weight: 600; overflow-wrap: anywhere; }
+  #looscid-error { border: 3px solid #000; padding: 12px; margin-bottom: 24px; font-weight: 700; }
+  #looscid-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
 <body>
-<div id="looscid-error" role="alert" hidden style="border:3px solid #b00020;background:#fff0f0;color:#111;padding:12px;margin:12px 0;border-radius:4px;"></div>
+<div id="looscid-error" role="alert" hidden></div>
+<div id="looscid-live" aria-live="polite" aria-atomic="true"></div>
 <script>
 (function () {
   function showErr(where, msg) {
     var box = document.getElementById('looscid-error');
     var live = document.getElementById('looscid-live');
-    var text = 'Something went wrong (' + where + '): ' + msg + '. Nothing was changed. Try again, or tell Carter this message.';
+    var text = 'Error (' + where + '): ' + msg + '. Nothing was changed.';
     if (box) { box.textContent = text; box.hidden = false; }
     if (live) { live.textContent = text; }
   }
   window.addEventListener('error', function (e) {
-    showErr('script error', (e && e.message ? e.message : 'unknown') + (e && e.lineno ? ' at line ' + e.lineno : ''));
+    showErr('script', (e && e.message ? e.message : 'unknown') + (e && e.lineno ? ' line ' + e.lineno : ''));
   });
   window.addEventListener('unhandledrejection', function (e) {
     var r = e && e.reason;
-    showErr('background step', r && r.message ? r.message : String(r));
-  });
-  window.addEventListener('DOMContentLoaded', function () {
-    var live = document.getElementById('looscid-live');
-    if (live) live.textContent = 'Testbench loaded. Ready.';
+    showErr('step', r && r.message ? r.message : String(r));
   });
 })();
 </script>
-<a class="skip" href="#main">Skip to content</a>
 
-<header>
-  <h1>Looscid Restore &amp; nsec Testbench</h1>
-  <p>A test page only. Everything runs in this browser. Nothing is sent to any server.</p>
-  <h2>Live announcer</h2>
-  <div id="looscid-live" aria-live="polite" aria-atomic="true"></div>
-</header>
+<main>
+<h1>Looscid Restore Testbench</h1>
 
-<main id="main">
+<h2>Generate Sample Backup</h2>
+<form id="sample-form">
+  <label for="sample-pass">Password</label>
+  <input id="sample-pass" type="password" autocomplete="new-password">
+  <button type="submit" id="sample-btn">Generate Sample</button>
+</form>
+<div id="sample-status" class="out"></div>
 
-<section id="sample-section" aria-label="Generate sample backup">
-  <h2>1. Generate Sample Backup</h2>
-  <p>Makes an encrypted test file with a made-up key, profile, Dreams, a chat, follows, and settings. Use it in section 2.</p>
-  <form id="sample-form">
-    <div class="field">
-      <label for="sample-pass">Passcode for the sample file (at least 8 characters)</label>
-      <input id="sample-pass" type="password" autocomplete="new-password">
-    </div>
-    <div class="buttons">
-      <button type="submit" id="sample-make">Generate sample backup</button>
-    </div>
-  </form>
-  <p id="sample-msg" class="msg"></p>
-  <p><a id="sample-download" href="#sample-section" hidden>Download sample file</a></p>
-  <p>Sample key for testing section 3 (test only): <code id="sample-nsec"></code></p>
-</section>
+<h2>Restore Backup File</h2>
+<form id="decrypt-form">
+  <label for="restore-file">Backup file</label>
+  <input id="restore-file" type="file" accept=".looscid,application/json">
+  <label for="restore-pass">Password</label>
+  <input id="restore-pass" type="password" autocomplete="current-password">
+  <button type="submit" id="decrypt-btn">Decrypt &amp; Inspect</button>
+</form>
+<div id="restore-status" class="out"></div>
+<div id="chooser"></div>
+<button type="button" id="restore-btn" disabled>Restore Selected</button>
+<div id="restore-result" class="out"></div>
 
-<section id="restore-section" aria-label="Restore from backup file">
-  <h2>2. Restore from Backup File</h2>
-  <form id="decrypt-form">
-    <div class="field">
-      <label for="restore-file">Backup file (.looscid)</label>
-      <input id="restore-file" type="file" accept=".looscid,application/json">
-    </div>
-    <div class="field">
-      <label for="restore-pass">Passcode for the file</label>
-      <input id="restore-pass" type="password" autocomplete="current-password">
-    </div>
-    <div class="buttons">
-      <button type="submit" id="decrypt-btn">Decrypt</button>
-    </div>
-  </form>
-  <p id="decrypt-msg" class="msg"></p>
-
-  <fieldset id="chooser">
-    <legend>What to restore</legend>
-    <div id="chooser-list">
-      <p>Decrypt a backup file to see what it holds.</p>
-    </div>
-  </fieldset>
-  <div class="buttons">
-    <button type="button" id="select-all" disabled>Select all</button>
-    <button type="button" id="select-none" disabled>Select none</button>
-    <button type="button" id="restore-btn" disabled>Restore selected</button>
-  </div>
-  <h3>Restore results</h3>
-  <ol id="restore-results"></ol>
-</section>
-
-<section id="nsec-section" aria-label="Direct nsec key import">
-  <h2>3. Direct nsec Key Import</h2>
-  <form id="nsec-form">
-    <div class="field">
-      <label for="nsec-input">Paste your nsec key</label>
-      <input id="nsec-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
-    </div>
-    <div class="buttons">
-      <button type="button" id="nsec-toggle" aria-pressed="false">Show key</button>
-      <button type="submit" id="nsec-import">Import key</button>
-    </div>
-  </form>
-  <p id="key-status" class="msg"></p>
-  <h2 id="restored-profile" tabindex="-1">Restored Profile</h2>
-  <div id="restored-details">
-    <p id="restored-npub"></p>
-    <p id="restored-name"></p>
-  </div>
-</section>
-
-<section id="log-section" aria-label="Announcement log">
-  <h2>Announcement log</h2>
-  <ol id="announce-log"></ol>
-</section>
-
+<h2>Import nsec Key</h2>
+<form id="nsec-form">
+  <label for="nsec-input">nsec key</label>
+  <input id="nsec-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button type="submit" id="nsec-btn">Import Key</button>
+</form>
+<div id="key-status" class="out"></div>
+<div id="restored-profile" tabindex="-1"></div>
 </main>
 
 <script>
@@ -147,43 +88,27 @@
   var AAD = new TextEncoder().encode('looscid-backup-v1');
   var ITER = 600000;
   var CATS = [
-    { id: 'identity', label: 'Identity and Nostr keys' },
-    { id: 'profile', label: 'Profile and relays' },
-    { id: 'dreams', label: 'Dreams and replies' },
+    { id: 'identity', label: 'Identity' },
+    { id: 'profile', label: 'Profile' },
+    { id: 'dreams', label: 'Dreams' },
     { id: 'chats', label: 'Chats' },
-    { id: 'feeds', label: 'Follows, mutes and feeds' },
-    { id: 'sound', label: 'Sound and app preferences' }
+    { id: 'feeds', label: 'Follows and feeds' },
+    { id: 'sound', label: 'Sound and settings' }
   ];
   var P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
   var N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
   var GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
   var GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
 
-  var state = { data: null, groups: null, sampleUrl: null, resultUrl: null };
+  var state = { data: null, groups: null };
   function $(id) { return document.getElementById(id); }
 
-  /* ---------- live announcer: one queue, each message spoken in order ---------- */
-  var queue = [], busy = false;
-  function announce(msg) {
-    queue.push(String(msg));
-    if (!busy) { busy = true; drain(); }
-  }
-  function drain() {
-    if (!queue.length) { busy = false; return; }
-    var msg = queue.shift();
-    var live = $('looscid-live');
-    live.textContent = '';
-    setTimeout(function () {
-      live.textContent = msg;
-      var li = document.createElement('li');
-      li.textContent = msg;
-      $('announce-log').appendChild(li);
-      setTimeout(drain, 700);
-    }, 150);
-  }
-  function setMsg(id, text) { $(id).textContent = text; }
+  /* Immediate, synchronous announcement and visible status. */
+  function say(msg) { $('looscid-live').textContent = String(msg); }
+  function report(id, msg) { $(id).textContent = String(msg); say(msg); }
+  function clearError() { var b = $('looscid-error'); b.textContent = ''; b.hidden = true; }
+  function showError(msg) { var b = $('looscid-error'); b.textContent = msg; b.hidden = false; say(msg); }
 
-  /* ---------- bytes and hex ---------- */
   function hexOf(bytes) {
     var s = '';
     for (var i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
@@ -206,7 +131,6 @@
     return o;
   }
 
-  /* ---------- backup crypto: same format as app/js/rem/looscid-backup.js ---------- */
   async function deriveKey(pass, salt, iters) {
     var base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pass).normalize('NFKC')), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: iters }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
@@ -219,7 +143,7 @@
     var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: AAD }, key, plain);
     return JSON.stringify({
       looscid_backup: 1,
-      note: 'Test file made by the Looscid restore testbench. Not a real backup.',
+      note: 'Test file. Not a real backup.',
       kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: ITER, salt: b64enc(salt) },
       cipher: { name: 'AES-GCM', iv: b64enc(iv) },
       data: b64enc(new Uint8Array(ct))
@@ -229,32 +153,31 @@
   async function unlockBackup(text, pass) {
     var f;
     try { f = JSON.parse(String(text || '').replace(/^\uFEFF/, '')); }
-    catch (e) { throw coded('not_backup', 'That file is not a Looscid backup file. Choose the file that ends in .looscid.'); }
+    catch (e) { throw coded('not_backup', 'Not a Looscid backup file.'); }
     if (!f || typeof f !== 'object' || f.looscid_backup == null || !f.kdf || !f.cipher || typeof f.data !== 'string') {
-      throw coded('not_backup', 'That file is not a Looscid backup file. Choose the file that ends in .looscid.');
+      throw coded('not_backup', 'Not a Looscid backup file.');
     }
-    if (f.looscid_backup > 1) throw coded('newer', 'This backup was made by a newer Looscid. Update Looscid, then try again.');
+    if (f.looscid_backup > 1) throw coded('newer', 'Made by a newer Looscid. Update first.');
     if (f.kdf.name !== 'PBKDF2' || f.kdf.hash !== 'SHA-256' || f.cipher.name !== 'AES-GCM') {
-      throw coded('not_backup', 'This backup file uses a lock this testbench does not know.');
+      throw coded('not_backup', 'Unknown lock type.');
     }
     var it = Number(f.kdf.iterations);
-    if (!Number.isInteger(it) || it < 100000 || it > 10000000) throw coded('damaged', 'This backup file looks damaged.');
-    if (!pass) throw coded('no_passcode', 'Type the passcode for this backup file first.');
+    if (!Number.isInteger(it) || it < 100000 || it > 10000000) throw coded('damaged', 'File looks damaged.');
+    if (!pass) throw coded('no_passcode', 'Type the password first.');
     var plain;
     try {
       var key = await deriveKey(pass, b64dec(f.kdf.salt), it);
       plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64dec(f.cipher.iv), additionalData: AAD }, key, b64dec(f.data));
     } catch (e) {
-      throw coded('wrong_passcode', "That passcode doesn't open this backup file. Nothing was changed. Check it and try again.");
+      throw coded('wrong_passcode', 'Wrong password. Nothing was changed.');
     }
     var d;
     try { d = JSON.parse(new TextDecoder().decode(plain)); }
-    catch (e) { throw coded('damaged', 'This backup file opened but looks damaged. Nothing was changed.'); }
-    if (!d || d.looscid_backup_data == null) throw coded('damaged', 'This backup file opened but looks damaged. Nothing was changed.');
+    catch (e) { throw coded('damaged', 'File opened but looks damaged. Nothing was changed.'); }
+    if (!d || d.looscid_backup_data == null) throw coded('damaged', 'File opened but looks damaged. Nothing was changed.');
     return d;
   }
 
-  /* ---------- bech32 (NIP-19 nsec and npub) ---------- */
   function polymod(values) {
     var GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
     var chk = 1;
@@ -309,7 +232,6 @@
     return { hrp: hrp, data: data.slice(0, data.length - 6) };
   }
 
-  /* ---------- secp256k1 (BIP-340 x-only public key), plain BigInt ---------- */
   function modp(a) { var r = a % P; return r < 0n ? r + P : r; }
   function powmod(b, e, m) {
     var r = 1n;
@@ -350,24 +272,22 @@
     return bytesOf(hex);
   }
 
-  /* ---------- nsec decoding and validation ---------- */
   function decodeNsec(input) {
     var s = String(input || '').trim();
-    if (!s) throw coded('empty', 'Paste your nsec key first.');
-    if (/^npub1/i.test(s)) throw coded('npub', 'That is a public key (npub). Paste the secret key, which starts with nsec1.');
-    if (!/^nsec1/i.test(s)) throw coded('prefix', 'A secret key starts with nsec1. Check what you pasted.');
+    if (!s) throw coded('empty', 'Paste an nsec key first.');
+    if (/^npub1/i.test(s)) throw coded('npub', 'That is a public key (npub). Paste the nsec key.');
+    if (!/^nsec1/i.test(s)) throw coded('prefix', 'An nsec key starts with nsec1.');
     var dec = bech32Decode(s);
-    if (!dec) throw coded('checksum', 'That nsec key is not valid. It may have a typo or be cut short.');
-    if (dec.hrp !== 'nsec') throw coded('prefix', 'That is not a secret key. A secret key starts with nsec1.');
+    if (!dec) throw coded('checksum', 'Invalid nsec key. Check for typos.');
+    if (dec.hrp !== 'nsec') throw coded('prefix', 'An nsec key starts with nsec1.');
     var bytes = convertBits(dec.data, 5, 8, false);
-    if (!bytes || bytes.length !== 32) throw coded('length', 'A secret key must be 32 bytes. This one is the wrong length.');
+    if (!bytes || bytes.length !== 32) throw coded('length', 'Invalid nsec key length.');
     var sk = Uint8Array.from(bytes);
     var k = BigInt('0x' + hexOf(sk));
-    if (k <= 0n || k >= N) throw coded('range', 'That key is outside the valid range for a Nostr key.');
+    if (k <= 0n || k >= N) throw coded('range', 'Key is out of range.');
     return sk;
   }
 
-  /* ---------- categories ---------- */
   function classify(k) {
     if (k === 'looscid_local_profile' || k === 'looscid_server') return null;
     if (k === 'looscid_dreams' || k === 'looscid_replies') return 'dreams';
@@ -416,74 +336,53 @@
     if (Array.isArray(d.dreams) && d.dreams.length) g.dreams.count = d.dreams.length;
     return g;
   }
-  function detectedCount(g) {
-    return CATS.filter(function (c) { return g[c.id].count > 0; }).length;
-  }
 
-  /* ---------- chooser ---------- */
   function renderChooser(g) {
-    var list = $('chooser-list');
-    list.textContent = '';
+    var box = $('chooser');
+    box.textContent = '';
+    var fs = document.createElement('fieldset');
+    var lg = document.createElement('legend');
+    lg.textContent = 'Restore';
+    fs.appendChild(lg);
     CATS.forEach(function (c) {
       var n = g[c.id].count;
       var lab = document.createElement('label');
       lab.className = 'check';
-      var box = document.createElement('input');
-      box.type = 'checkbox';
-      box.id = 'cat-' + c.id;
-      box.checked = n > 0;
-      box.disabled = n === 0;
-      var span = document.createElement('span');
-      span.textContent = c.label + ': ' + n + (n === 1 ? ' item' : ' items');
-      lab.appendChild(box);
-      lab.appendChild(span);
-      list.appendChild(lab);
+      var box2 = document.createElement('input');
+      box2.type = 'checkbox';
+      box2.id = 'cat-' + c.id;
+      box2.checked = n > 0;
+      box2.disabled = n === 0;
+      lab.appendChild(box2);
+      lab.appendChild(document.createTextNode(c.label + ' (' + n + ')'));
+      fs.appendChild(lab);
     });
-    $('select-all').disabled = false;
-    $('select-none').disabled = false;
+    box.appendChild(fs);
     $('restore-btn').disabled = false;
   }
-  function setAllBoxes(on) {
-    CATS.forEach(function (c) {
-      var b = $('cat-' + c.id);
-      if (b && !b.disabled) b.checked = on;
-    });
-  }
   function clearChooser() {
-    var list = $('chooser-list');
-    list.textContent = '';
-    var p = document.createElement('p');
-    p.textContent = 'Decrypt a backup file to see what it holds.';
-    list.appendChild(p);
-    $('select-all').disabled = true;
-    $('select-none').disabled = true;
+    $('chooser').textContent = '';
     $('restore-btn').disabled = true;
   }
 
-  /* ---------- 1. sample backup ---------- */
+  /* 1. Generate sample backup */
   async function onSample(e) {
     e.preventDefault();
+    clearError();
     var pass = $('sample-pass').value;
-    if (pass.length < 8) {
-      setMsg('sample-msg', 'The passcode must be at least 8 characters.');
-      announce('The passcode must be at least 8 characters.');
-      return;
-    }
-    setMsg('sample-msg', 'Making the sample file. This takes a few seconds.');
-    announce('Making sample backup');
+    if (pass.length < 8) { report('sample-status', 'Password must be at least 8 characters.'); return; }
+    report('sample-status', 'Generating sample backup...');
+    var btn = $('sample-btn');
+    btn.disabled = true;
     try {
-      var sk, k, tries = 0;
-      do {
-        sk = crypto.getRandomValues(new Uint8Array(32));
-        k = BigInt('0x' + hexOf(sk));
-      } while ((k <= 0n || k >= N) && tries++ < 5);
+      var sk = crypto.getRandomValues(new Uint8Array(32));
       var pub = hexOf(schnorrPub(sk));
       var nsec = bech32Encode('nsec', sk);
       var now = Date.now();
       var data = {
         from: 'testbench',
         key: { nsec: nsec, pubkey: pub },
-        profile: { name: 'Sample Person', handle: 'sample', bio: 'Sample profile for testing.', website: '' },
+        profile: { name: 'Sample Person', handle: 'sample', bio: 'Sample profile.', website: '' },
         server: null,
         dreams: [
           { id: 'sample-d1', at: now - 60000, text: 'First sample Dream', audience: 'public' },
@@ -503,58 +402,51 @@
         home: null
       };
       var text = await lockBackup(data, pass);
-      if (state.sampleUrl) URL.revokeObjectURL(state.sampleUrl);
-      state.sampleUrl = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
-      var a = $('sample-download');
-      a.href = state.sampleUrl;
+      var url = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
+      var st = $('sample-status');
+      st.textContent = '';
+      st.appendChild(document.createTextNode('Sample ready. '));
+      var a = document.createElement('a');
+      a.href = url;
       a.setAttribute('download', 'sample-test.looscid');
-      a.textContent = 'Download sample file (sample-test.looscid)';
-      a.hidden = false;
-      $('sample-nsec').textContent = nsec;
-      setMsg('sample-msg', 'Sample file made. Download it, then choose it in section 2.');
-      announce('Sample backup made. Download it, then choose it in section 2.');
+      a.textContent = 'Download sample-test.looscid';
+      st.appendChild(a);
+      var k = document.createElement('div');
+      k.textContent = 'Test nsec key: ' + nsec;
+      st.appendChild(k);
+      say('Sample ready. Download link below.');
     } catch (err) {
-      setMsg('sample-msg', 'The sample file could not be made: ' + err.message);
-      announce('The sample file could not be made.');
+      report('sample-status', 'Sample failed: ' + (err && err.message ? err.message : err));
+    } finally {
+      btn.disabled = false;
     }
   }
 
-  /* ---------- 2. decrypt and chooser ---------- */
+  /* 2. Decrypt and inspect */
   async function onDecrypt(e) {
     e.preventDefault();
-    var input = $('restore-file');
-    var file = input.files && input.files[0];
+    clearError();
+    var file = $('restore-file').files && $('restore-file').files[0];
     var pass = $('restore-pass').value;
     state.data = null; state.groups = null; clearChooser();
-    if (!file) {
-      setMsg('decrypt-msg', 'Choose your backup file first. It ends in .looscid.');
-      announce('Choose your backup file first.');
-      return;
-    }
-    if (!pass) {
-      setMsg('decrypt-msg', 'Type the passcode for this backup file first.');
-      announce('Type the passcode for this backup file first.');
-      return;
-    }
-    announce('Backup file chosen: ' + file.name + '. Opening it.');
-    setMsg('decrypt-msg', 'Opening the backup file.');
+    if (!file) { report('restore-status', 'Choose a backup file first.'); return; }
+    if (!pass) { report('restore-status', 'Type the password first.'); return; }
+    report('restore-status', 'Decrypting...');
     try {
       var text = await file.text();
       var d = await unlockBackup(text, pass);
       var g = buildGroups(d);
       state.data = d; state.groups = g;
       renderChooser(g);
-      var n = detectedCount(g);
-      setMsg('decrypt-msg', 'Backup file parsed: ' + n + ' categories detected. Check what to restore, then choose Restore selected.');
-      announce('Backup file parsed: ' + n + ' categories detected');
-      var firstWithData = CATS.find(function (c) { return g[c.id].count > 0; }) || CATS[0];
-      var firstBox = $('cat-' + firstWithData.id);
-      if (firstBox && !firstBox.disabled) firstBox.focus();
+      var n = CATS.filter(function (c) { return g[c.id].count > 0; }).length;
+      report('restore-status', 'Decrypted. ' + n + ' categories found. Choose items, then Restore Selected.');
+      var first = CATS.find(function (c) { return g[c.id].count > 0; });
+      if (first && $('cat-' + first.id)) $('cat-' + first.id).focus();
     } catch (err) {
-      setMsg('decrypt-msg', err.message);
-      announce(err.code === 'wrong_passcode' ? 'Wrong passcode. Nothing was changed.' : err.message);
+      report('restore-status', err.message);
     }
   }
+
   function planWrites(d, g, chosen) {
     var app = (d.app && typeof d.app === 'object') ? d.app : {};
     var out = [];
@@ -594,103 +486,73 @@
     return out;
   }
   function onRestore() {
+    clearError();
+    if (!state.data) { report('restore-result', 'Decrypt a backup file first.'); return; }
     var chosen = {};
     CATS.forEach(function (c) {
       var b = $('cat-' + c.id);
       chosen[c.id] = !!(b && b.checked && !b.disabled);
     });
-    if (!state.data) { announce('Decrypt a backup file first.'); return; }
-    if (!CATS.some(function (c) { return chosen[c.id]; })) {
-      announce('Nothing selected. Check at least one category to restore.');
-      return;
-    }
-    announce('Restoring selected items...');
+    if (!CATS.some(function (c) { return chosen[c.id]; })) { report('restore-result', 'Nothing selected.'); return; }
     var writes = planWrites(state.data, state.groups, chosen);
-    var updated = 0, failed = [], perCat = {};
+    var updated = 0, failed = [];
     writes.forEach(function (w) {
       try {
         if (w.value == null) throw coded('missing', 'no value');
         localStorage.setItem(w.key, w.value);
         if (localStorage.getItem(w.key) !== w.value) throw coded('mismatch', 'read back differs');
         updated++;
-        perCat[w.cat] = (perCat[w.cat] || 0) + 1;
       } catch (err) {
         failed.push(w.key);
       }
     });
-    var list = $('restore-results');
-    list.textContent = '';
-    CATS.forEach(function (c) {
-      if (!chosen[c.id]) return;
-      var li = document.createElement('li');
-      li.textContent = c.label + ': ' + (perCat[c.id] || 0) + ' written and checked';
-      list.appendChild(li);
-    });
-    if (failed.length) {
-      var bad = document.createElement('li');
-      bad.textContent = 'Not saved: ' + failed.join(', ');
-      list.appendChild(bad);
-    }
-    var msg = 'Restore complete. ' + updated + ' items updated.' + (failed.length ? ' ' + failed.length + ' could not be saved: ' + failed.join(', ') + '.' : '');
-    setMsg('decrypt-msg', msg);
-    announce(msg);
+    var msg = 'Restored ' + updated + ' items.' + (failed.length ? ' Not saved: ' + failed.join(', ') + '.' : '');
+    report('restore-result', msg);
   }
 
-  /* ---------- 3. nsec import ---------- */
+  /* 3. Import nsec key */
   function onImport(e) {
     e.preventDefault();
+    clearError();
     var input = $('nsec-input');
-    var status = $('key-status');
+    var profile = $('restored-profile');
+    profile.textContent = '';
     var sk;
     try {
       sk = decodeNsec(input.value);
     } catch (err) {
-      status.textContent = err.message;
-      announce(err.message);
+      report('key-status', err.message);
       input.focus();
       return;
     }
-    announce('Key validated');
-    status.textContent = 'Key validated. Deriving identity...';
-    announce('Deriving identity...');
+    report('key-status', 'Key valid. Deriving public key...');
     var pubHex = hexOf(schnorrPub(sk));
     var npub = bech32Encode('npub', bytesOf(pubHex));
     var d = state.data;
     var matched = d && state.groups && state.groups.identity.pub === pubHex ? d.profile : null;
     var hasProfile = matched && ['name', 'handle', 'bio', 'website'].some(function (f) { return String(matched[f] || '').trim(); });
-    $('restored-npub').textContent = 'Public key (npub): ' + npub;
+    var lines = ['Public key: ' + npub];
     if (hasProfile) {
-      $('restored-name').textContent = 'Name: ' + (matched.name || 'no name') + (matched.handle ? ', handle @' + String(matched.handle).replace(/^@/, '') : '');
-      status.textContent = 'Profile loaded from the backup file.';
-      announce('Profile loaded');
+      lines.push('Name: ' + (matched.name || 'no name'));
+      if (matched.handle) lines.push('Handle: @' + String(matched.handle).replace(/^@/, ''));
+      report('key-status', 'Profile loaded.');
     } else {
-      $('restored-name').textContent = d ? 'No profile for this key in the loaded backup file.' : 'No backup file is loaded, so no profile can be shown. Decrypt a file in section 2 to look for one.';
-      status.textContent = 'No profile in this key.';
-      announce('No profile in this key');
+      lines.push(d ? 'No profile for this key in the loaded file.' : 'No backup file loaded. Decrypt one in section 2 to see a profile.');
+      report('key-status', 'Key imported.');
     }
+    lines.forEach(function (t) {
+      var p = document.createElement('p');
+      p.textContent = t;
+      profile.appendChild(p);
+    });
     input.value = '';
-    input.type = 'password';
-    $('nsec-toggle').textContent = 'Show key';
-    $('nsec-toggle').setAttribute('aria-pressed', 'false');
-    var heading = $('restored-profile');
-    heading.focus();
-  }
-  function onToggle() {
-    var input = $('nsec-input');
-    var showing = input.type === 'password';
-    input.type = showing ? 'text' : 'password';
-    this.textContent = showing ? 'Hide key' : 'Show key';
-    this.setAttribute('aria-pressed', showing ? 'true' : 'false');
+    profile.focus();
   }
 
-  /* ---------- wiring ---------- */
   $('sample-form').addEventListener('submit', onSample);
   $('decrypt-form').addEventListener('submit', onDecrypt);
-  $('nsec-form').addEventListener('submit', onImport);
-  $('nsec-toggle').addEventListener('click', onToggle);
-  $('select-all').addEventListener('click', function () { setAllBoxes(true); announce('All categories selected.'); });
-  $('select-none').addEventListener('click', function () { setAllBoxes(false); announce('No categories selected.'); });
   $('restore-btn').addEventListener('click', onRestore);
+  $('nsec-form').addEventListener('submit', onImport);
 })();
 </script>
 </body>
