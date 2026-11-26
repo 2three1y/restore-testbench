@@ -1,1 +1,674 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Looscid Restore and nsec Testbench</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 740px; margin: 0 auto; padding: 16px; line-height: 1.5; color: #111; background: #fff; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #bbb; padding-bottom: 4px; }
+  h3 { font-size: 1.05rem; margin-top: 1.5rem; }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 8px; top: 8px; background: #fff; padding: 8px; border: 2px solid #111; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+  input[type=password], input[type=text], input[type=file] { min-height: 44px; font: inherit; padding: 8px; border: 1px solid #555; border-radius: 4px; max-width: 100%; }
+  button { min-height: 44px; min-width: 44px; padding: 8px 14px; font: inherit; border: 2px solid #111; background: #fff; color: #111; border-radius: 4px; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, a:focus-visible, fieldset input:focus-visible { outline: 3px solid #0a58ca; outline-offset: 2px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  fieldset { border: 1px solid #888; border-radius: 4px; padding: 12px; margin: 12px 0; }
+  legend { font-weight: 600; padding: 0 4px; }
+  .check { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  #looscid-live { border: 1px solid #888; padding: 8px; min-height: 2.5em; border-radius: 4px; background: #f6f6f6; }
+  .msg { font-weight: 600; min-height: 1.5em; }
+  code { word-break: break-all; }
+  ol { padding-left: 1.4rem; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header>
+  <h1>Looscid Restore &amp; nsec Testbench</h1>
+  <p>A test page only. Everything runs in this browser. Nothing is sent to any server.</p>
+  <h2>Live announcer</h2>
+  <div id="looscid-live" aria-live="polite" aria-atomic="true"></div>
+</header>
+
+<main id="main">
+
+<section id="sample-section" aria-label="Generate sample backup">
+  <h2>1. Generate Sample Backup</h2>
+  <p>Makes an encrypted test file with a made-up key, profile, Dreams, a chat, follows, and settings. Use it in section 2.</p>
+  <form id="sample-form">
+    <div class="field">
+      <label for="sample-pass">Passcode for the sample file (at least 8 characters)</label>
+      <input id="sample-pass" type="password" autocomplete="new-password">
+    </div>
+    <div class="buttons">
+      <button type="submit" id="sample-make">Generate sample backup</button>
+    </div>
+  </form>
+  <p id="sample-msg" class="msg"></p>
+  <p><a id="sample-download" href="#sample-section" hidden>Download sample file</a></p>
+  <p>Sample key for testing section 3 (test only): <code id="sample-nsec"></code></p>
+</section>
+
+<section id="restore-section" aria-label="Restore from backup file">
+  <h2>2. Restore from Backup File</h2>
+  <form id="decrypt-form">
+    <div class="field">
+      <label for="restore-file">Backup file (.looscid)</label>
+      <input id="restore-file" type="file" accept=".looscid,application/json">
+    </div>
+    <div class="field">
+      <label for="restore-pass">Passcode for the file</label>
+      <input id="restore-pass" type="password" autocomplete="current-password">
+    </div>
+    <div class="buttons">
+      <button type="submit" id="decrypt-btn">Decrypt</button>
+    </div>
+  </form>
+  <p id="decrypt-msg" class="msg"></p>
+
+  <fieldset id="chooser">
+    <legend>What to restore</legend>
+    <div id="chooser-list">
+      <p>Decrypt a backup file to see what it holds.</p>
+    </div>
+  </fieldset>
+  <div class="buttons">
+    <button type="button" id="select-all" disabled>Select all</button>
+    <button type="button" id="select-none" disabled>Select none</button>
+    <button type="button" id="restore-btn" disabled>Restore selected</button>
+  </div>
+  <h3>Restore results</h3>
+  <ol id="restore-results"></ol>
+</section>
+
+<section id="nsec-section" aria-label="Direct nsec key import">
+  <h2>3. Direct nsec Key Import</h2>
+  <form id="nsec-form">
+    <div class="field">
+      <label for="nsec-input">Paste your nsec key</label>
+      <input id="nsec-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="buttons">
+      <button type="button" id="nsec-toggle" aria-pressed="false">Show key</button>
+      <button type="submit" id="nsec-import">Import key</button>
+    </div>
+  </form>
+  <p id="key-status" class="msg"></p>
+  <h2 id="restored-profile" tabindex="-1">Restored Profile</h2>
+  <div id="restored-details">
+    <p id="restored-npub"></p>
+    <p id="restored-name"></p>
+  </div>
+</section>
+
+<section id="log-section" aria-label="Announcement log">
+  <h2>Announcement log</h2>
+  <ol id="announce-log"></ol>
+</section>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  var SECRET_RE = /^looscid_(nostr|sessions|identity|oauth)/;
+  var AAD = new TextEncoder().encode('looscid-backup-v1');
+  var ITER = 600000;
+  var CATS = [
+    { id: 'identity', label: 'Identity and Nostr keys' },
+    { id: 'profile', label: 'Profile and relays' },
+    { id: 'dreams', label: 'Dreams and replies' },
+    { id: 'chats', label: 'Chats' },
+    { id: 'feeds', label: 'Follows, mutes and feeds' },
+    { id: 'sound', label: 'Sound and app preferences' }
+  ];
+  var P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+  var N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+  var GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
+  var GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
+
+  var state = { data: null, groups: null, sampleUrl: null, resultUrl: null };
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- live announcer: one queue, each message spoken in order ---------- */
+  var queue = [], busy = false;
+  function announce(msg) {
+    queue.push(String(msg));
+    if (!busy) { busy = true; drain(); }
+  }
+  function drain() {
+    if (!queue.length) { busy = false; return; }
+    var msg = queue.shift();
+    var live = $('looscid-live');
+    live.textContent = '';
+    setTimeout(function () {
+      live.textContent = msg;
+      var li = document.createElement('li');
+      li.textContent = msg;
+      $('announce-log').appendChild(li);
+      setTimeout(drain, 700);
+    }, 150);
+  }
+  function setMsg(id, text) { $(id).textContent = text; }
+
+  /* ---------- bytes and hex ---------- */
+  function hexOf(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+    return s;
+  }
+  function bytesOf(hex) {
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+  function b64enc(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  }
+  function b64dec(str) {
+    var s = atob(String(str || ''));
+    var o = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) o[i] = s.charCodeAt(i);
+    return o;
+  }
+
+  /* ---------- backup crypto: same format as app/js/rem/looscid-backup.js ---------- */
+  async function deriveKey(pass, salt, iters) {
+    var base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pass).normalize('NFKC')), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: iters }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function lockBackup(data, pass) {
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await deriveKey(pass, salt, ITER);
+    var plain = new TextEncoder().encode(JSON.stringify(Object.assign({ looscid_backup_data: 1, made: Date.now() }, data)));
+    var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: AAD }, key, plain);
+    return JSON.stringify({
+      looscid_backup: 1,
+      note: 'Test file made by the Looscid restore testbench. Not a real backup.',
+      kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: ITER, salt: b64enc(salt) },
+      cipher: { name: 'AES-GCM', iv: b64enc(iv) },
+      data: b64enc(new Uint8Array(ct))
+    });
+  }
+  function coded(code, msg) { var e = new Error(msg); e.code = code; return e; }
+  async function unlockBackup(text, pass) {
+    var f;
+    try { f = JSON.parse(String(text || '').replace(/^\uFEFF/, '')); }
+    catch (e) { throw coded('not_backup', 'That file is not a Looscid backup file. Choose the file that ends in .looscid.'); }
+    if (!f || typeof f !== 'object' || f.looscid_backup == null || !f.kdf || !f.cipher || typeof f.data !== 'string') {
+      throw coded('not_backup', 'That file is not a Looscid backup file. Choose the file that ends in .looscid.');
+    }
+    if (f.looscid_backup > 1) throw coded('newer', 'This backup was made by a newer Looscid. Update Looscid, then try again.');
+    if (f.kdf.name !== 'PBKDF2' || f.kdf.hash !== 'SHA-256' || f.cipher.name !== 'AES-GCM') {
+      throw coded('not_backup', 'This backup file uses a lock this testbench does not know.');
+    }
+    var it = Number(f.kdf.iterations);
+    if (!Number.isInteger(it) || it < 100000 || it > 10000000) throw coded('damaged', 'This backup file looks damaged.');
+    if (!pass) throw coded('no_passcode', 'Type the passcode for this backup file first.');
+    var plain;
+    try {
+      var key = await deriveKey(pass, b64dec(f.kdf.salt), it);
+      plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64dec(f.cipher.iv), additionalData: AAD }, key, b64dec(f.data));
+    } catch (e) {
+      throw coded('wrong_passcode', "That passcode doesn't open this backup file. Nothing was changed. Check it and try again.");
+    }
+    var d;
+    try { d = JSON.parse(new TextDecoder().decode(plain)); }
+    catch (e) { throw coded('damaged', 'This backup file opened but looks damaged. Nothing was changed.'); }
+    if (!d || d.looscid_backup_data == null) throw coded('damaged', 'This backup file opened but looks damaged. Nothing was changed.');
+    return d;
+  }
+
+  /* ---------- bech32 (NIP-19 nsec and npub) ---------- */
+  function polymod(values) {
+    var GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+    var chk = 1;
+    for (var i = 0; i < values.length; i++) {
+      var top = chk >>> 25;
+      chk = ((chk & 0x1ffffff) << 5) ^ values[i];
+      for (var j = 0; j < 5; j++) { if ((top >>> j) & 1) chk ^= GEN[j]; }
+    }
+    return chk;
+  }
+  function hrpExpand(hrp) {
+    var r = [], i;
+    for (i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >>> 5);
+    r.push(0);
+    for (i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+    return r;
+  }
+  function convertBits(data, from, to, pad) {
+    var acc = 0, bits = 0, out = [], maxv = (1 << to) - 1, maxAcc = (1 << (from + to - 1)) - 1;
+    for (var i = 0; i < data.length; i++) {
+      var v = data[i];
+      if (v < 0 || (v >> from) !== 0) return null;
+      acc = ((acc << from) | v) & maxAcc;
+      bits += from;
+      while (bits >= to) { bits -= to; out.push((acc >> bits) & maxv); }
+    }
+    if (pad) { if (bits > 0) out.push((acc << (to - bits)) & maxv); }
+    else if (bits >= from || ((acc << (to - bits)) & maxv)) return null;
+    return out;
+  }
+  function bech32Encode(hrp, bytes) {
+    var data = convertBits(Array.prototype.slice.call(bytes), 8, 5, true);
+    var mod = polymod(hrpExpand(hrp).concat(data, [0, 0, 0, 0, 0, 0])) ^ 1;
+    var out = hrp + '1', i;
+    for (i = 0; i < data.length; i++) out += CHARSET.charAt(data[i]);
+    for (i = 0; i < 6; i++) out += CHARSET.charAt((mod >>> (5 * (5 - i))) & 31);
+    return out;
+  }
+  function bech32Decode(str) {
+    var s = String(str);
+    if (s !== s.toLowerCase() && s !== s.toUpperCase()) return null;
+    s = s.toLowerCase();
+    var pos = s.lastIndexOf('1');
+    if (pos < 1 || pos + 7 > s.length || s.length > 90) return null;
+    var hrp = s.slice(0, pos), data = [], i;
+    for (i = pos + 1; i < s.length; i++) {
+      var v = CHARSET.indexOf(s.charAt(i));
+      if (v < 0) return null;
+      data.push(v);
+    }
+    if (polymod(hrpExpand(hrp).concat(data)) !== 1) return null;
+    return { hrp: hrp, data: data.slice(0, data.length - 6) };
+  }
+
+  /* ---------- secp256k1 (BIP-340 x-only public key), plain BigInt ---------- */
+  function modp(a) { var r = a % P; return r < 0n ? r + P : r; }
+  function powmod(b, e, m) {
+    var r = 1n;
+    b = ((b % m) + m) % m;
+    while (e > 0n) { if (e & 1n) r = (r * b) % m; b = (b * b) % m; e >>= 1n; }
+    return r;
+  }
+  function invp(a) { return powmod(modp(a), P - 2n, P); }
+  function pointAdd(p, q) {
+    if (!p) return q;
+    if (!q) return p;
+    var l;
+    if (p.x === q.x) {
+      if (modp(p.y + q.y) === 0n) return null;
+      l = modp(3n * p.x * p.x * invp(2n * p.y));
+    } else {
+      l = modp((q.y - p.y) * invp(q.x - p.x));
+    }
+    var x = modp(l * l - p.x - q.x);
+    var y = modp(l * (p.x - x) - p.y);
+    return { x: x, y: y };
+  }
+  function pointMul(k, pt) {
+    var r = null, q = pt;
+    while (k > 0n) {
+      if (k & 1n) r = pointAdd(r, q);
+      q = pointAdd(q, q);
+      k >>= 1n;
+    }
+    return r;
+  }
+  function schnorrPub(sk) {
+    var k = BigInt('0x' + hexOf(sk));
+    var pt = pointMul(k, { x: GX, y: GY });
+    if (!pt) throw coded('range', 'That key cannot be used.');
+    var hex = pt.x.toString(16);
+    while (hex.length < 64) hex = '0' + hex;
+    return bytesOf(hex);
+  }
+
+  /* ---------- nsec decoding and validation ---------- */
+  function decodeNsec(input) {
+    var s = String(input || '').trim();
+    if (!s) throw coded('empty', 'Paste your nsec key first.');
+    if (/^npub1/i.test(s)) throw coded('npub', 'That is a public key (npub). Paste the secret key, which starts with nsec1.');
+    if (!/^nsec1/i.test(s)) throw coded('prefix', 'A secret key starts with nsec1. Check what you pasted.');
+    var dec = bech32Decode(s);
+    if (!dec) throw coded('checksum', 'That nsec key is not valid. It may have a typo or be cut short.');
+    if (dec.hrp !== 'nsec') throw coded('prefix', 'That is not a secret key. A secret key starts with nsec1.');
+    var bytes = convertBits(dec.data, 5, 8, false);
+    if (!bytes || bytes.length !== 32) throw coded('length', 'A secret key must be 32 bytes. This one is the wrong length.');
+    var sk = Uint8Array.from(bytes);
+    var k = BigInt('0x' + hexOf(sk));
+    if (k <= 0n || k >= N) throw coded('range', 'That key is outside the valid range for a Nostr key.');
+    return sk;
+  }
+
+  /* ---------- categories ---------- */
+  function classify(k) {
+    if (k === 'looscid_local_profile' || k === 'looscid_server') return null;
+    if (k === 'looscid_dreams' || k === 'looscid_replies') return 'dreams';
+    if (/cherry|chat/.test(k)) return 'chats';
+    if (/follow|mute|foryou|list|topic|circle/.test(k)) return 'feeds';
+    return 'sound';
+  }
+  function jsonCount(s) {
+    try {
+      var v = JSON.parse(s);
+      if (Array.isArray(v)) return v.length;
+      if (v && typeof v === 'object') return Object.keys(v).length;
+      return 1;
+    } catch (e) { return 1; }
+  }
+  function buildGroups(d) {
+    var app = (d.app && typeof d.app === 'object') ? d.app : {};
+    var g = {
+      identity: { keys: [], count: 0, pub: null },
+      profile: { keys: [], count: 0 },
+      dreams: { keys: [], count: 0 },
+      chats: { keys: [], count: 0 },
+      feeds: { keys: [], count: 0 },
+      sound: { keys: [], count: 0 }
+    };
+    if (d.key && d.key.nsec) {
+      try {
+        var sk = decodeNsec(d.key.nsec);
+        g.identity.pub = hexOf(schnorrPub(sk));
+        g.identity.keys.push('looscid_test_identity');
+        g.identity.count = 1;
+      } catch (e) { g.identity.count = 0; }
+    }
+    var p = d.profile || {};
+    ['name', 'handle', 'bio', 'website'].forEach(function (f) { if (String(p[f] || '').trim()) g.profile.count++; });
+    if (d.server && d.server.home) g.profile.count++;
+    if (g.profile.count) g.profile.keys.push('looscid_local_profile');
+    Object.keys(app).forEach(function (k) {
+      if (k.indexOf('looscid_') !== 0 || typeof app[k] !== 'string' || SECRET_RE.test(k)) return;
+      var cat = classify(k);
+      if (!cat) return;
+      g[cat].keys.push(k);
+      if (cat === 'chats' || cat === 'dreams') g[cat].count += jsonCount(app[k]);
+      else g[cat].count++;
+    });
+    if (Array.isArray(d.dreams) && d.dreams.length) g.dreams.count = d.dreams.length;
+    return g;
+  }
+  function detectedCount(g) {
+    return CATS.filter(function (c) { return g[c.id].count > 0; }).length;
+  }
+
+  /* ---------- chooser ---------- */
+  function renderChooser(g) {
+    var list = $('chooser-list');
+    list.textContent = '';
+    CATS.forEach(function (c) {
+      var n = g[c.id].count;
+      var lab = document.createElement('label');
+      lab.className = 'check';
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = 'cat-' + c.id;
+      box.checked = n > 0;
+      box.disabled = n === 0;
+      var span = document.createElement('span');
+      span.textContent = c.label + ': ' + n + (n === 1 ? ' item' : ' items');
+      lab.appendChild(box);
+      lab.appendChild(span);
+      list.appendChild(lab);
+    });
+    $('select-all').disabled = false;
+    $('select-none').disabled = false;
+    $('restore-btn').disabled = false;
+  }
+  function setAllBoxes(on) {
+    CATS.forEach(function (c) {
+      var b = $('cat-' + c.id);
+      if (b && !b.disabled) b.checked = on;
+    });
+  }
+  function clearChooser() {
+    var list = $('chooser-list');
+    list.textContent = '';
+    var p = document.createElement('p');
+    p.textContent = 'Decrypt a backup file to see what it holds.';
+    list.appendChild(p);
+    $('select-all').disabled = true;
+    $('select-none').disabled = true;
+    $('restore-btn').disabled = true;
+  }
+
+  /* ---------- 1. sample backup ---------- */
+  async function onSample(e) {
+    e.preventDefault();
+    var pass = $('sample-pass').value;
+    if (pass.length < 8) {
+      setMsg('sample-msg', 'The passcode must be at least 8 characters.');
+      announce('The passcode must be at least 8 characters.');
+      return;
+    }
+    setMsg('sample-msg', 'Making the sample file. This takes a few seconds.');
+    announce('Making sample backup');
+    try {
+      var sk, k, tries = 0;
+      do {
+        sk = crypto.getRandomValues(new Uint8Array(32));
+        k = BigInt('0x' + hexOf(sk));
+      } while ((k <= 0n || k >= N) && tries++ < 5);
+      var pub = hexOf(schnorrPub(sk));
+      var nsec = bech32Encode('nsec', sk);
+      var now = Date.now();
+      var data = {
+        from: 'testbench',
+        key: { nsec: nsec, pubkey: pub },
+        profile: { name: 'Sample Person', handle: 'sample', bio: 'Sample profile for testing.', website: '' },
+        server: null,
+        dreams: [
+          { id: 'sample-d1', at: now - 60000, text: 'First sample Dream', audience: 'public' },
+          { id: 'sample-r1', at: now - 30000, text: 'A sample reply', audience: 'public', reply_to: 'sample-d1' }
+        ],
+        rem_objects: [],
+        app: {
+          looscid_dreams: JSON.stringify([{ id: 'sample-d1', text: 'First sample Dream', created: now - 60000, likes: 0 }]),
+          looscid_replies: JSON.stringify([{ id: 'sample-r1', text: 'A sample reply', created: now - 30000, replyTo: 'sample-d1' }]),
+          looscid_cherry_chats: JSON.stringify([{ id: 'c1', title: 'Sample chat', msgs: [] }]),
+          looscid_follows: JSON.stringify(['sample']),
+          looscid_mutes: JSON.stringify([]),
+          looscid_foryou_topics: JSON.stringify(['music']),
+          looscid_sound_settings: JSON.stringify({ volume: 5 }),
+          looscid_theme: 'light'
+        },
+        home: null
+      };
+      var text = await lockBackup(data, pass);
+      if (state.sampleUrl) URL.revokeObjectURL(state.sampleUrl);
+      state.sampleUrl = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
+      var a = $('sample-download');
+      a.href = state.sampleUrl;
+      a.setAttribute('download', 'sample-test.looscid');
+      a.textContent = 'Download sample file (sample-test.looscid)';
+      a.hidden = false;
+      $('sample-nsec').textContent = nsec;
+      setMsg('sample-msg', 'Sample file made. Download it, then choose it in section 2.');
+      announce('Sample backup made. Download it, then choose it in section 2.');
+    } catch (err) {
+      setMsg('sample-msg', 'The sample file could not be made: ' + err.message);
+      announce('The sample file could not be made.');
+    }
+  }
+
+  /* ---------- 2. decrypt and chooser ---------- */
+  async function onDecrypt(e) {
+    e.preventDefault();
+    var input = $('restore-file');
+    var file = input.files && input.files[0];
+    var pass = $('restore-pass').value;
+    state.data = null; state.groups = null; clearChooser();
+    if (!file) {
+      setMsg('decrypt-msg', 'Choose your backup file first. It ends in .looscid.');
+      announce('Choose your backup file first.');
+      return;
+    }
+    if (!pass) {
+      setMsg('decrypt-msg', 'Type the passcode for this backup file first.');
+      announce('Type the passcode for this backup file first.');
+      return;
+    }
+    announce('Backup file chosen: ' + file.name + '. Opening it.');
+    setMsg('decrypt-msg', 'Opening the backup file.');
+    try {
+      var text = await file.text();
+      var d = await unlockBackup(text, pass);
+      var g = buildGroups(d);
+      state.data = d; state.groups = g;
+      renderChooser(g);
+      var n = detectedCount(g);
+      setMsg('decrypt-msg', 'Backup file parsed: ' + n + ' categories detected. Check what to restore, then choose Restore selected.');
+      announce('Backup file parsed: ' + n + ' categories detected');
+      var firstWithData = CATS.find(function (c) { return g[c.id].count > 0; }) || CATS[0];
+      var firstBox = $('cat-' + firstWithData.id);
+      if (firstBox && !firstBox.disabled) firstBox.focus();
+    } catch (err) {
+      setMsg('decrypt-msg', err.message);
+      announce(err.code === 'wrong_passcode' ? 'Wrong passcode. Nothing was changed.' : err.message);
+    }
+  }
+  function planWrites(d, g, chosen) {
+    var app = (d.app && typeof d.app === 'object') ? d.app : {};
+    var out = [];
+    if (chosen.identity && g.identity.count && g.identity.pub) {
+      out.push({ cat: 'identity', key: 'looscid_test_identity', value: JSON.stringify({ pubkey: g.identity.pub, npub: bech32Encode('npub', bytesOf(g.identity.pub)) }) });
+    }
+    if (chosen.profile && g.profile.count) {
+      var p = d.profile || {}, nm = String(p.name || '');
+      out.push({ cat: 'profile', key: 'looscid_local_profile', value: JSON.stringify({
+        displayName: nm, name: nm,
+        handle: p.handle ? '@' + String(p.handle).replace(/^@/, '') : '',
+        bio: String(p.bio || ''), website: String(p.website || ''),
+        initials: nm.trim().slice(0, 1).toUpperCase()
+      }) });
+      if (d.server && d.server.home) {
+        out.push({ cat: 'profile', key: 'looscid_server', value: JSON.stringify({ home: String(d.server.home), handle: String(d.server.handle || '') }) });
+      }
+    }
+    if (chosen.dreams && g.dreams.count) {
+      if (g.dreams.keys.length) {
+        g.dreams.keys.forEach(function (k) { out.push({ cat: 'dreams', key: k, value: app[k] }); });
+      } else {
+        var dreams = (d.dreams || []).filter(function (x) { return x && !x.reply_to; }).map(function (x) {
+          return { id: x.id, text: x.text, created: x.at, likes: 0 };
+        });
+        var replies = (d.dreams || []).filter(function (x) { return x && x.reply_to; }).map(function (x) {
+          return { id: x.id, text: x.text, created: x.at, replyTo: x.reply_to };
+        });
+        out.push({ cat: 'dreams', key: 'looscid_dreams', value: JSON.stringify(dreams) });
+        if (replies.length) out.push({ cat: 'dreams', key: 'looscid_replies', value: JSON.stringify(replies) });
+      }
+    }
+    ['chats', 'feeds', 'sound'].forEach(function (cat) {
+      if (!chosen[cat]) return;
+      g[cat].keys.forEach(function (k) { out.push({ cat: cat, key: k, value: app[k] }); });
+    });
+    return out;
+  }
+  function onRestore() {
+    var chosen = {};
+    CATS.forEach(function (c) {
+      var b = $('cat-' + c.id);
+      chosen[c.id] = !!(b && b.checked && !b.disabled);
+    });
+    if (!state.data) { announce('Decrypt a backup file first.'); return; }
+    if (!CATS.some(function (c) { return chosen[c.id]; })) {
+      announce('Nothing selected. Check at least one category to restore.');
+      return;
+    }
+    announce('Restoring selected items...');
+    var writes = planWrites(state.data, state.groups, chosen);
+    var updated = 0, failed = [], perCat = {};
+    writes.forEach(function (w) {
+      try {
+        if (w.value == null) throw coded('missing', 'no value');
+        localStorage.setItem(w.key, w.value);
+        if (localStorage.getItem(w.key) !== w.value) throw coded('mismatch', 'read back differs');
+        updated++;
+        perCat[w.cat] = (perCat[w.cat] || 0) + 1;
+      } catch (err) {
+        failed.push(w.key);
+      }
+    });
+    var list = $('restore-results');
+    list.textContent = '';
+    CATS.forEach(function (c) {
+      if (!chosen[c.id]) return;
+      var li = document.createElement('li');
+      li.textContent = c.label + ': ' + (perCat[c.id] || 0) + ' written and checked';
+      list.appendChild(li);
+    });
+    if (failed.length) {
+      var bad = document.createElement('li');
+      bad.textContent = 'Not saved: ' + failed.join(', ');
+      list.appendChild(bad);
+    }
+    var msg = 'Restore complete. ' + updated + ' items updated.' + (failed.length ? ' ' + failed.length + ' could not be saved: ' + failed.join(', ') + '.' : '');
+    setMsg('decrypt-msg', msg);
+    announce(msg);
+  }
+
+  /* ---------- 3. nsec import ---------- */
+  function onImport(e) {
+    e.preventDefault();
+    var input = $('nsec-input');
+    var status = $('key-status');
+    var sk;
+    try {
+      sk = decodeNsec(input.value);
+    } catch (err) {
+      status.textContent = err.message;
+      announce(err.message);
+      input.focus();
+      return;
+    }
+    announce('Key validated');
+    status.textContent = 'Key validated. Deriving identity...';
+    announce('Deriving identity...');
+    var pubHex = hexOf(schnorrPub(sk));
+    var npub = bech32Encode('npub', bytesOf(pubHex));
+    var d = state.data;
+    var matched = d && state.groups && state.groups.identity.pub === pubHex ? d.profile : null;
+    var hasProfile = matched && ['name', 'handle', 'bio', 'website'].some(function (f) { return String(matched[f] || '').trim(); });
+    $('restored-npub').textContent = 'Public key (npub): ' + npub;
+    if (hasProfile) {
+      $('restored-name').textContent = 'Name: ' + (matched.name || 'no name') + (matched.handle ? ', handle @' + String(matched.handle).replace(/^@/, '') : '');
+      status.textContent = 'Profile loaded from the backup file.';
+      announce('Profile loaded');
+    } else {
+      $('restored-name').textContent = d ? 'No profile for this key in the loaded backup file.' : 'No backup file is loaded, so no profile can be shown. Decrypt a file in section 2 to look for one.';
+      status.textContent = 'No profile in this key.';
+      announce('No profile in this key');
+    }
+    input.value = '';
+    input.type = 'password';
+    $('nsec-toggle').textContent = 'Show key';
+    $('nsec-toggle').setAttribute('aria-pressed', 'false');
+    var heading = $('restored-profile');
+    heading.focus();
+  }
+  function onToggle() {
+    var input = $('nsec-input');
+    var showing = input.type === 'password';
+    input.type = showing ? 'text' : 'password';
+    this.textContent = showing ? 'Hide key' : 'Show key';
+    this.setAttribute('aria-pressed', showing ? 'true' : 'false');
+  }
+
+  /* ---------- wiring ---------- */
+  $('sample-form').addEventListener('submit', onSample);
+  $('decrypt-form').addEventListener('submit', onDecrypt);
+  $('nsec-form').addEventListener('submit', onImport);
+  $('nsec-toggle').addEventListener('click', onToggle);
+  $('select-all').addEventListener('click', function () { setAllBoxes(true); announce('All categories selected.'); });
+  $('select-none').addEventListener('click', function () { setAllBoxes(false); announce('No categories selected.'); });
+  $('restore-btn').addEventListener('click', onRestore);
+})();
+</script>
+</body>
+</html>
