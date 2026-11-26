@@ -28,6 +28,29 @@
 </style>
 </head>
 <body>
+<div id="looscid-error" role="alert" hidden style="border:3px solid #b00020;background:#fff0f0;color:#111;padding:12px;margin:12px 0;border-radius:4px;"></div>
+<script>
+(function () {
+  function showErr(where, msg) {
+    var box = document.getElementById('looscid-error');
+    var live = document.getElementById('looscid-live');
+    var text = 'Something went wrong (' + where + '): ' + msg + '. Nothing was changed. Try again, or tell Carter this message.';
+    if (box) { box.textContent = text; box.hidden = false; }
+    if (live) { live.textContent = text; }
+  }
+  window.addEventListener('error', function (e) {
+    showErr('script error', (e && e.message ? e.message : 'unknown') + (e && e.lineno ? ' at line ' + e.lineno : ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    showErr('background step', r && r.message ? r.message : String(r));
+  });
+  window.addEventListener('DOMContentLoaded', function () {
+    var live = document.getElementById('looscid-live');
+    if (live) live.textContent = 'Testbench loaded. Ready.';
+  });
+})();
+</script>
 <a class="skip" href="#main">Skip to content</a>
 
 <header>
